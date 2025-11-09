@@ -1,4 +1,4 @@
-package main.java.client;
+package client;
 
 import javax.swing.*;
 import java.io.*;
@@ -34,6 +34,6 @@ public class BlackjackClient2 {
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new BlackjackClient("localhost", 5555));
+        SwingUtilities.invokeLater(() -> new BlackjackClient2("localhost", 5555));
     }
 }

@@ -1,4 +1,4 @@
-package main.java.model;
+package model;
 
 import javax.swing.*;
 import java.awt.*;
@@ -13,8 +13,12 @@ public class Card {
         this.suit = suit;
         this.rank = rank;
         this.value = value;
-        this.image = new ImageIcon(getClass().getResource(imagePath))
-                .getImage().getScaledInstance(90, 140, Image.SCALE_SMOOTH);
+
+        String basePath = System.getProperty("user.dir") + "\\src\\main\\resources";
+        String fullPath = basePath + imagePath.replace("/", "\\"); // 경로 맞춤
+
+        Image img = new ImageIcon(fullPath).getImage();
+        this.image = img.getScaledInstance(90, 140, Image.SCALE_SMOOTH);
     }
 
     public String getSuit() { return suit; }

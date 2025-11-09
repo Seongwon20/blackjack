@@ -1,9 +1,11 @@
-package main.java.client;
+package client;
+
+import model.*;
+
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.PrintWriter;
-import main.java.model.*;
 
 public class GameGUI extends JFrame {
     private JTextArea chatArea;
