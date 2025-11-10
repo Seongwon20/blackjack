@@ -28,7 +28,6 @@ public class BlackjackServer {
                 clients.add(client);
                 new Thread(client).start();
             }
-
         } catch (IOException e) {
             System.out.println("[서버 오류] " + e.getMessage());
         }
@@ -56,21 +55,14 @@ public class BlackjackServer {
         p1.getHand().addCard(deck.draw());
         p2.getHand().addCard(deck.draw());
         p2.getHand().addCard(deck.draw());
-        dealerHand.addCard(deck.draw());
-        dealerHand.addCard(deck.draw());
+        dealerHand.addCard(deck.draw()); // 공개 1장
+        dealerHand.addCard(deck.draw()); // 비공개 1장
 
-        // 첫 턴
         broadcast("GAME:START");
-
-        // 딜러는 첫 번째 카드만 공개
-        broadcast("GAME:CARD:DEALER:" + formatCard(dealerHand.getCards().get(0)));
-        broadcast("GAME:CARD:HIDDEN"); // 딜러의 두 번째 카드는 숨김 처리
-
-        // 플레이어 카드 전송
+        broadcast("GAME:CARD:DEALER:" + formatCard(dealerHand.getCards().get(0))); // 첫 장만 공개
         broadcast("GAME:CARD:PLAYER1:" + formatCards(p1.getHand()));
         broadcast("GAME:CARD:PLAYER2:" + formatCards(p2.getHand()));
 
-        // 턴 시작
         broadcast("GAME:TURN:PLAYER1");
     }
 
@@ -84,36 +76,67 @@ public class BlackjackServer {
         return String.join(",", list);
     }
 
-    /** ✅ 딜러 카드 공개 */
+    /** ✅ 딜러 턴 (플레이어 턴 종료 후 실행) */
     private void revealDealerCards() {
         broadcast("CHAT:[SYSTEM] 딜러 카드 공개!");
-        broadcast("GAME:CARD:DEALER:" + formatCards(dealerHand));
 
-        while (dealerHand.getValue() < 17) {
-            dealerHand.addCard(deck.draw());
+        // 숨긴 카드 포함해서 순차적으로 공개
+        for (int i = 0; i < dealerHand.getCards().size(); i++) {
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
             broadcast("GAME:CARD:DEALER:" + formatCards(dealerHand));
         }
 
-        int dealerValue = dealerHand.getValue();
-        if (dealerValue > 21) {
-            broadcast("CHAT:[SYSTEM] 딜러 버스트! (" + dealerValue + ")");
-        } else {
-            broadcast("CHAT:[SYSTEM] 딜러 최종 점수: " + dealerValue);
+        // 17 미만이면 1초 간격으로 드로우
+        while (dealerHand.getValue() < 17) {
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+            Card newCard = deck.draw();
+            dealerHand.addCard(newCard);
+            broadcast("GAME:CARD:DEALER:" + formatCards(dealerHand));
+
+            int dealerValue = dealerHand.getValue();
+            if (dealerValue > 21) {
+                broadcast("CHAT:[SYSTEM] 딜러 버스트! (" + dealerValue + ")");
+                broadcastResults();
+                resetGame();
+                return;
+            }
         }
 
+        int dealerValue = dealerHand.getValue();
+        broadcast("CHAT:[SYSTEM] 딜러 최종 점수: " + dealerValue);
         broadcastResults();
+        resetGame();
     }
 
-    /** ✅ 결과 표시 */
+    /** ✅ 승패 판단 로직 (딜러 버스트 문구 추가됨) */
     private void broadcastResults() {
         int d = dealerHand.getValue();
         int v1 = p1.getHand().getValue();
         int v2 = p2.getHand().getValue();
 
-        broadcast("CHAT:[RESULT] 딜러(" + d + ")  P1(" + v1 + ")  P2(" + v2 + ")");
+        String dealerText = (d > 21) ? (d + ", 버스트") : String.valueOf(d);
+
+        String r1, r2;
+        if (v1 > 21) r1 = "패배 (버스트)";
+        else if (d > 21 || v1 > d) r1 = "승리!";
+        else if (v1 == d) r1 = "무승부";
+        else r1 = "패배";
+
+        if (v2 > 21) r2 = "패배 (버스트)";
+        else if (d > 21 || v2 > d) r2 = "승리!";
+        else if (v2 == d) r2 = "무승부";
+        else r2 = "패배";
+
+        broadcast("CHAT:[RESULT] 딜러(" + dealerText + ")  P1(" + v1 + " → " + r1 + ")  P2(" + v2 + " → " + r2 + ")");
     }
 
-    // ===== 클라이언트 스레드 =====
+    /** ✅ 다음 라운드를 위해 초기화 */
+    private void resetGame() {
+        gameStarted = false;
+        turn = 1;
+    }
+
+    // ===================== 클라이언트 스레드 =====================
     private class ClientHandler implements Runnable {
         private Socket socket;
         private BufferedReader in;
@@ -144,7 +167,6 @@ public class BlackjackServer {
                         handleStand(role);
                     }
                 }
-
             } catch (IOException e) {
                 System.out.println("클라이언트 종료: " + e.getMessage());
             } finally {
@@ -163,7 +185,6 @@ public class BlackjackServer {
             Player cur = role.equals("PLAYER1") ? p1 : p2;
             cur.getHand().addCard(deck.draw());
             broadcast("GAME:CARD:" + role + ":" + formatCards(cur.getHand()));
-
             if (cur.getHand().getValue() > 21) {
                 broadcast("CHAT:[" + role + "] 버스트!");
                 nextTurn();
@@ -175,14 +196,10 @@ public class BlackjackServer {
             nextTurn();
         }
 
-        /** ✅ 턴 넘김 */
         private void nextTurn() {
             turn++;
-            if (turn == 3) {
-                revealDealerCards();
-            } else if (turn == 2) {
-                broadcast("GAME:TURN:PLAYER2");
-            }
+            if (turn == 2) broadcast("GAME:TURN:PLAYER2");
+            else if (turn == 3) revealDealerCards();
         }
 
         void send(String msg) {
