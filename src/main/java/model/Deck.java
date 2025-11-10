@@ -16,15 +16,7 @@ public class Deck {
                     case "J", "Q", "K" -> 10;
                     default -> Integer.parseInt(r);
                 };
-
-                // 확장자 처리 (J/Q/K는 png, 나머지는 jpg)
-                String ext = (r.equals("J") || r.equals("Q") || r.equals("K")) ? ".png" : ".jpg";
-
-                // 경로 예: /main.resources/하트/A.jpg
-                String path = "/" + suit + "/" + r + ext;
-
-
-                cards.add(new Card(suit, r, value, path));
+                cards.add(new Card(suit, r, value));
             }
         }
         Collections.shuffle(cards);
