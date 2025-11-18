@@ -2,9 +2,10 @@ package client;
 
 import javax.swing.*;
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
 
 public class BlackjackClient {
+
     private Socket socket;
     private BufferedReader in;
     private PrintWriter out;
@@ -13,14 +14,18 @@ public class BlackjackClient {
     public BlackjackClient(String host, int port, String role) {
         try {
             socket = new Socket(host, port);
+
             in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
             out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"), true);
 
             gui = new GameGUI(line -> out.println(line));
             gui.setMyRole(role);
 
+            // 서버에 역할 전달
             out.println("MODE:" + role);
+
             new Thread(this::listen).start();
+
         } catch (IOException e) {
             JOptionPane.showMessageDialog(null, "서버 연결 실패!\n" + e.getMessage());
         }
@@ -30,21 +35,53 @@ public class BlackjackClient {
         try {
             String msg;
             while ((msg = in.readLine()) != null) {
-                if (msg.startsWith("CHAT:")) gui.appendMessage(msg.substring(5));
-                else if (msg.startsWith("GAME:CARD:")) gui.applyCardMessage(msg);
-                else if (msg.startsWith("GAME:TURN:")) gui.setTurn(msg.substring(10));
-                else if (msg.startsWith("WAITING:")) gui.appendMessage(msg.substring(8));
-                else gui.appendMessage(msg);
+
+                // 채팅
+                if (msg.startsWith("CHAT:")) {
+                    gui.appendMessage(msg.substring(5));
+                }
+
+                // 카드 갱신
+                else if (msg.startsWith("GAME:CARD:")) {
+                    gui.applyCardMessage(msg);
+                }
+
+                // 턴 변경
+                else if (msg.startsWith("GAME:TURN:")) {
+                    gui.setTurn(msg.substring(10));
+                }
+
+                // 칩 갱신
+                else if (msg.startsWith("CHIPS:P1:")) {
+                    gui.updateChips("PLAYER1", Integer.parseInt(msg.substring(9)));
+                }
+                else if (msg.startsWith("CHIPS:P2:")) {
+                    gui.updateChips("PLAYER2", Integer.parseInt(msg.substring(9)));
+                }
+
+                // 베팅 시작
+                else if (msg.equals("INFO:BETTING")) {
+                    gui.enableBetting();
+                }
+
+                // 서버 안내 메시지
+                else if (msg.startsWith("WAITING:")) {
+                    gui.appendMessage(msg.substring(8));
+                }
+                else if (msg.startsWith("INFO:새 라운드")) {
+                    gui.appendMessage(msg.substring(5));
+                }
+
+                // 그 외 일반 메시지
+                else {
+                    gui.appendMessage(msg);
+                }
             }
         } catch (IOException ignored) {}
     }
 
     public static void main(String[] args) {
-        String[] options = {"PLAYER1", "PLAYER2"};
-        String role = (String) JOptionPane.showInputDialog(
-                null, "역할 선택:", "블랙잭 클라이언트",
-                JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-        if (role != null)
-            SwingUtilities.invokeLater(() -> new BlackjackClient("localhost", 5555, role));
+        SwingUtilities.invokeLater(StartScreen::new);
     }
+
 }

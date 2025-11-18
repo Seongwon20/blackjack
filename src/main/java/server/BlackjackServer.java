@@ -6,203 +6,317 @@ import java.net.*;
 import java.util.*;
 
 public class BlackjackServer {
+
     private static final int PORT = 5555;
+
     private final List<ClientHandler> clients = Collections.synchronizedList(new ArrayList<>());
+
+    private Player p1, p2;
     private Deck deck;
     private Hand dealerHand;
-    private Player p1, p2;
-    private boolean gameStarted = false;
-    private int turn = 1; // 1=PLAYER1, 2=PLAYER2, 3=딜러 턴
+
+    private int betCount = 0;      // 두 플레이어 모두 배팅하면 2가 됨
+    private boolean roundInProgress = false;
 
     public static void main(String[] args) {
         new BlackjackServer().startServer();
     }
 
-    private void startServer() {
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("서버 실행 중... 포트 " + PORT);
+    // --------------------- 서버 시작 ---------------------
+    public void startServer() {
+        System.out.println("==== Blackjack Server 실행됨 ====");
 
+        try (ServerSocket server = new ServerSocket(PORT)) {
             while (true) {
-                Socket socket = serverSocket.accept();
-                ClientHandler client = new ClientHandler(socket);
-                clients.add(client);
-                new Thread(client).start();
+                Socket socket = server.accept();
+                ClientHandler ch = new ClientHandler(socket);
+                clients.add(ch);
+                new Thread(ch).start();
             }
         } catch (IOException e) {
-            System.out.println("[서버 오류] " + e.getMessage());
+            System.out.println("서버 오류: " + e.getMessage());
         }
     }
 
-    private void broadcast(String message) {
+    // --------------------- 브로드캐스트 ---------------------
+    private void broadcast(String msg) {
         synchronized (clients) {
-            for (ClientHandler c : clients) c.send(message);
+            for (ClientHandler c : clients) c.send(msg);
         }
     }
 
-    /** ✅ 게임 시작 */
+    // --------------------- 라운드 초기화 ---------------------
     private void startNewRound() {
-        if (clients.size() < 2 || gameStarted) return;
-        gameStarted = true;
-        System.out.println("두 명 접속됨 → 게임 시작!");
+
+        roundInProgress = false;
+        betCount = 0;
 
         deck = new Deck();
         dealerHand = new Hand();
-        p1 = new Player("PLAYER1", 1000);
-        p2 = new Player("PLAYER2", 1000);
 
-        // 초기 분배
+        p1.getHand().getCards().clear();
+        p2.getHand().getCards().clear();
+
+        p1.resetBet();
+        p2.resetBet();
+
+        broadcast("CHAT:[SYSTEM] 새로운 라운드를 시작합니다. 배팅을 해주세요.");
+        broadcast("INFO:BETTING");
+    }
+
+    // --------------------- 첫 카드 분배 ---------------------
+    private void dealInitialCards() {
+        roundInProgress = true;
+
         p1.getHand().addCard(deck.draw());
         p1.getHand().addCard(deck.draw());
-        p2.getHand().addCard(deck.draw());
-        p2.getHand().addCard(deck.draw());
-        dealerHand.addCard(deck.draw()); // 공개 1장
-        dealerHand.addCard(deck.draw()); // 비공개 1장
 
-        broadcast("GAME:START");
-        broadcast("GAME:CARD:DEALER:" + formatCard(dealerHand.getCards().get(0))); // 첫 장만 공개
+        p2.getHand().addCard(deck.draw());
+        p2.getHand().addCard(deck.draw());
+
+        dealerHand.addCard(deck.draw());
+        dealerHand.addCard(deck.draw());
+
         broadcast("GAME:CARD:PLAYER1:" + formatCards(p1.getHand()));
         broadcast("GAME:CARD:PLAYER2:" + formatCards(p2.getHand()));
+
+        // 딜러 첫 장만 공개
+        Card open = dealerHand.getCards().get(0);
+        broadcast("GAME:CARD:DEALER:" + open.getSuit() + "-" + open.getRank());
 
         broadcast("GAME:TURN:PLAYER1");
     }
 
-    private String formatCard(Card c) {
-        return c.getSuit() + "-" + c.getRank();
-    }
-
-    private String formatCards(Hand hand) {
+    // --------------------- 카드 포맷 ---------------------
+    private String formatCards(Hand h) {
         List<String> list = new ArrayList<>();
-        for (Card c : hand.getCards()) list.add(formatCard(c));
+        for (Card c : h.getCards()) list.add(c.getSuit() + "-" + c.getRank());
         return String.join(",", list);
     }
 
-    /** ✅ 딜러 턴 (플레이어 턴 종료 후 실행) */
-    private void revealDealerCards() {
-        broadcast("CHAT:[SYSTEM] 딜러 카드 공개!");
-
-        // 숨긴 카드 포함해서 순차적으로 공개
-        for (int i = 0; i < dealerHand.getCards().size(); i++) {
-            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-            broadcast("GAME:CARD:DEALER:" + formatCards(dealerHand));
-        }
-
-        // 17 미만이면 1초 간격으로 드로우
-        while (dealerHand.getValue() < 17) {
-            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-            Card newCard = deck.draw();
-            dealerHand.addCard(newCard);
-            broadcast("GAME:CARD:DEALER:" + formatCards(dealerHand));
-
-            int dealerValue = dealerHand.getValue();
-            if (dealerValue > 21) {
-                broadcast("CHAT:[SYSTEM] 딜러 버스트! (" + dealerValue + ")");
-                broadcastResults();
-                resetGame();
-                return;
-            }
-        }
-
-        int dealerValue = dealerHand.getValue();
-        broadcast("CHAT:[SYSTEM] 딜러 최종 점수: " + dealerValue);
-        broadcastResults();
-        resetGame();
+    // --------------------- 칩 상태 업데이트 ---------------------
+    private void updateChips() {
+        broadcast("CHIPS:P1:" + p1.getChips());
+        broadcast("CHIPS:P2:" + p2.getChips());
     }
 
-    /** ✅ 승패 판단 로직 (딜러 버스트 문구 추가됨) */
-    private void broadcastResults() {
+    // --------------------- 딜러 턴 ---------------------
+    private void dealerTurn() {
+
+        broadcast("CHAT:[SYSTEM] 딜러 턴 시작.");
+        broadcast("GAME:CARD:DEALER:" + formatCards(dealerHand));
+
+        while (dealerHand.getValue() < 17) {
+            try { Thread.sleep(900); } catch (Exception ignored) {}
+            dealerHand.addCard(deck.draw());
+            broadcast("GAME:CARD:DEALER:" + formatCards(dealerHand));
+        }
+
+        evaluateResults();
+    }
+
+    // --------------------- 승패 판정 ---------------------
+    private void evaluateResults() {
+
         int d = dealerHand.getValue();
         int v1 = p1.getHand().getValue();
         int v2 = p2.getHand().getValue();
 
-        String dealerText = (d > 21) ? (d + ", 버스트") : String.valueOf(d);
+        String r1 = resultText(v1, d);
+        String r2 = resultText(v2, d);
 
-        String r1, r2;
-        if (v1 > 21) r1 = "패배 (버스트)";
-        else if (d > 21 || v1 > d) r1 = "승리!";
-        else if (v1 == d) r1 = "무승부";
-        else r1 = "패배";
+        broadcast("CHAT:[RESULT] 딜러(" + d +
+                ") | P1(" + v1 + ":" + r1 +
+                ") | P2(" + v2 + ":" + r2 + ")");
 
-        if (v2 > 21) r2 = "패배 (버스트)";
-        else if (d > 21 || v2 > d) r2 = "승리!";
-        else if (v2 == d) r2 = "무승부";
-        else r2 = "패배";
+        applyChipResults(p1, v1, d);
+        applyChipResults(p2, v2, d);
 
-        broadcast("CHAT:[RESULT] 딜러(" + dealerText + ")  P1(" + v1 + " → " + r1 + ")  P2(" + v2 + " → " + r2 + ")");
+        updateChips();
+
+        if (p1.getChips() <= 0 || p2.getChips() <= 0) {
+            broadcast("CHAT:[SYSTEM] 누군가 칩이 0개라 게임 종료.");
+            return;
+        }
+
+        try { Thread.sleep(2000); } catch (Exception ignored) {}
+
+        startNewRound();
     }
 
-    /** ✅ 다음 라운드를 위해 초기화 */
-    private void resetGame() {
-        gameStarted = false;
-        turn = 1;
+    private String resultText(int v, int d) {
+        if (v > 21) return "버스트";
+        if (d > 21) return "승리";
+        if (v > d) return "승리";
+        if (v == d) return "무승부";
+        return "패배";
     }
 
-    // ===================== 클라이언트 스레드 =====================
+    // --------------------- 칩 정산 ---------------------
+    private void applyChipResults(Player p, int v, int d) {
+
+        int bet = p.getBetAmount();
+
+        // 무승부 → 배팅금 반환
+        if (v == d) {
+            p.winChips(bet);
+            return;
+        }
+
+        // 버스트 → 배팅 잃음
+        if (v > 21) {
+            p.loseChips(bet);
+            return;
+        }
+
+        // 딜러 버스트 → 승리
+        if (d > 21) {
+            p.winChips(bet);
+            return;
+        }
+
+        // 블랙잭 3:2 지급
+        if (v == 21 && p.getHand().getCards().size() == 2) {
+            p.winChips((int)(bet * 1.5));
+            return;
+        }
+
+        // 일반 승리
+        if (v > d) {
+            p.winChips(bet);
+        } else {
+            p.loseChips(bet);
+        }
+    }
+
+    // --------------------- 클라이언트 핸들러 ---------------------
     private class ClientHandler implements Runnable {
+
         private Socket socket;
         private BufferedReader in;
         private BufferedWriter out;
+
         private String role = "UNKNOWN";
 
         ClientHandler(Socket socket) { this.socket = socket; }
 
         @Override
         public void run() {
+
             try {
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
                 out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
 
-                send("WAITING:상대 플레이어를 기다리는 중…");
+                send("WAITING:상대 플레이어 연결을 기다리는 중...");
 
                 String line;
+
                 while ((line = in.readLine()) != null) {
+
+                    // 역할 설정
                     if (line.startsWith("MODE:")) {
-                        role = line.substring(5).trim();
-                        System.out.println(role + " 접속됨");
-                        checkPlayersAndStart();
-                    } else if (line.startsWith("CHAT:")) {
+                        role = line.substring(5);
+
+                        if (role.equals("PLAYER1")) p1 = new Player("PLAYER1");
+                        if (role.equals("PLAYER2")) p2 = new Player("PLAYER2");
+
+                        if (p1 != null && p2 != null) {
+                            broadcast("CHAT:[SYSTEM] 두 플레이어 연결됨. 배팅 시작!");
+                            startNewRound();
+                        }
+                    }
+
+                    // 채팅
+                    else if (line.startsWith("CHAT:")) {
                         broadcast("CHAT:[" + role + "] " + line.substring(5));
-                    } else if (line.startsWith("GAME:HIT")) {
+                    }
+
+                    // --------------------- 배팅 ---------------------
+                    else if (line.startsWith("BET:")) {
+                        handleBet(role, line.substring(4));
+                    }
+
+                    // --------------------- HIT ---------------------
+                    else if (line.startsWith("GAME:HIT")) {
                         handleHit(role);
-                    } else if (line.startsWith("GAME:STAND")) {
+                    }
+
+                    // --------------------- STAND ---------------------
+                    else if (line.startsWith("GAME:STAND")) {
                         handleStand(role);
                     }
+
                 }
+
             } catch (IOException e) {
-                System.out.println("클라이언트 종료: " + e.getMessage());
-            } finally {
-                clients.remove(this);
-                try { socket.close(); } catch (IOException ignored) {}
+                System.out.println("클라이언트 종료: " + role);
+            }
+
+            clients.remove(this);
+        }
+
+        // --------------------- 배팅 처리 ---------------------
+        private void handleBet(String role, String amount) {
+
+            Player cur = (role.equals("PLAYER1") ? p1 : p2);
+
+            int chips = cur.getChips();
+            int bet = amount.equals("ALL") ? chips : Integer.parseInt(amount);
+
+            if (bet <= 0 || bet > chips) {
+                send("CHAT:[SYSTEM] 잘못된 배팅입니다.");
+                return;
+            }
+
+            cur.setBetAmount(bet);
+            betCount++;
+
+            broadcast("CHAT:[" + role + "] " + bet + "칩 배팅");
+
+            // **두 플레이어 모두 배팅함 → 라운드 시작**
+            if (betCount == 2) {
+
+                try { Thread.sleep(600); } catch (Exception ignored) {}
+
+                dealInitialCards();
             }
         }
 
-        private void checkPlayersAndStart() {
-            long cnt = clients.stream().filter(c -> c.role.startsWith("PLAYER")).count();
-            if (cnt >= 2) startNewRound();
-            else broadcast("WAITING:상대 플레이어를 기다리는 중…");
-        }
-
+        // --------------------- HIT ---------------------
         private void handleHit(String role) {
+
+            if (!roundInProgress) return;
+
             Player cur = role.equals("PLAYER1") ? p1 : p2;
+
             cur.getHand().addCard(deck.draw());
             broadcast("GAME:CARD:" + role + ":" + formatCards(cur.getHand()));
+
+            // 버스트 처리
             if (cur.getHand().getValue() > 21) {
                 broadcast("CHAT:[" + role + "] 버스트!");
-                nextTurn();
+
+                if (role.equals("PLAYER1")) {
+                    broadcast("GAME:TURN:PLAYER2");
+                } else {
+                    dealerTurn();
+                }
             }
         }
 
+        // --------------------- STAND ---------------------
         private void handleStand(String role) {
-            broadcast("CHAT:[" + role + "] Stand!");
-            nextTurn();
+            broadcast("CHAT:[" + role + "] Stand");
+
+            if (role.equals("PLAYER1")) {
+                broadcast("GAME:TURN:PLAYER2");
+            } else {
+                dealerTurn();
+            }
         }
 
-        private void nextTurn() {
-            turn++;
-            if (turn == 2) broadcast("GAME:TURN:PLAYER2");
-            else if (turn == 3) revealDealerCards();
-        }
-
-        void send(String msg) {
+        // --------------------- 단일 전송 ---------------------
+        private void send(String msg) {
             try {
                 out.write(msg + "\n");
                 out.flush();
