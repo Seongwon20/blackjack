@@ -2,7 +2,6 @@ package client;
 
 import javax.swing.*;
 import java.awt.*;
-import java.net.URL;
 
 public class StartScreen extends JFrame {
 
@@ -14,15 +13,14 @@ public class StartScreen extends JFrame {
         setLayout(null); // 절대 좌표 배치
 
         // =====================================
-        //  배경 이미지 불러오기
+        //  [수정] 배경 이미지 불러오기 (절대경로 방식)
         // =====================================
-        URL bgURL = getClass().getResource("/start.png");  // 너가 보내준 이미지를 start.png로 저장
-        JLabel bgLabel = new JLabel();
+        String bgPath = System.getProperty("user.dir") + "\\src\\main\\resources\\start.png";
 
-        if (bgURL != null) {
-            Image bg = new ImageIcon(bgURL).getImage().getScaledInstance(1100, 750, Image.SCALE_SMOOTH);
-            bgLabel.setIcon(new ImageIcon(bg));
-        }
+        JLabel bgLabel = new JLabel();
+        // 이미지 로드 및 리사이징
+        Image bg = new ImageIcon(bgPath).getImage().getScaledInstance(1100, 750, Image.SCALE_SMOOTH);
+        bgLabel.setIcon(new ImageIcon(bg));
 
         bgLabel.setBounds(0, 0, 1100, 750);
         add(bgLabel);

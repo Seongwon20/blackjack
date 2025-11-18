@@ -3,7 +3,7 @@ package client;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.net.URL;
+// import java.net.URL; // 더 이상 URL import는 필요 없음
 
 public class GameGUI extends JFrame {
 
@@ -38,16 +38,16 @@ public class GameGUI extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        // ==================== 카드 뒷면 이미지 로딩 ====================
-        URL backURL = getClass().getResource("/back.png");
-        if (backURL != null) {
-            backIcon = new ImageIcon(
-                    new ImageIcon(backURL).getImage()
-                            .getScaledInstance(90, 140, Image.SCALE_SMOOTH)
-            );
-        } else {
-            System.out.println("[ERROR] back.png 를 찾을 수 없습니다!");
-        }
+        // ==================== [수정] 카드 뒷면 이미지 로딩 ====================
+        // 사진의 방식: System.getProperty("user.dir") + 경로 문자열 결합
+        String backPath = System.getProperty("user.dir") + "\\src\\main\\resources\\back.png";
+
+        // ImageIcon에 경로(String)를 바로 넣어서 로드
+        backIcon = new ImageIcon(
+                new ImageIcon(backPath).getImage()
+                        .getScaledInstance(90, 140, Image.SCALE_SMOOTH)
+        );
+        // ==================================================================
 
         // ==================== 상단 UI ====================
         JPanel control = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
@@ -183,17 +183,15 @@ public class GameGUI extends JFrame {
         chatArea.setCaretPosition(chatArea.getText().length());
     }
 
-    // ==================== 카드 이미지 로딩 ====================
+    // ==================== [수정] 카드 이미지 로딩 ====================
+    // 사진의 방식대로 변경: user.dir + 경로 문자열 결합
     private ImageIcon loadCardIcon(String suit, String rank) {
-        String path = "/" + suit + "/" + rank + ".png";
-        URL url = getClass().getResource(path);
 
-        if (url == null) {
-            appendMessage("[이미지 없음] " + path);
-            return null;
-        }
+        // 경로 생성 (사진의 초록색 부분 참고)
+        String path = System.getProperty("user.dir") + "\\src\\main\\resources\\" + suit + "\\" + rank + ".png";
 
-        Image img = new ImageIcon(url).getImage()
+        // 이미지 로드 및 리사이징
+        Image img = new ImageIcon(path).getImage()
                 .getScaledInstance(90, 140, Image.SCALE_SMOOTH);
 
         return new ImageIcon(img);
@@ -257,6 +255,7 @@ public class GameGUI extends JFrame {
 
         } catch (Exception e) {
             appendMessage("[오류] 카드 표시 실패: " + e.getMessage());
+            e.printStackTrace(); // 콘솔에 에러 자세히 출력
         }
     }
 
