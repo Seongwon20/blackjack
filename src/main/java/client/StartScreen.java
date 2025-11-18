@@ -6,28 +6,19 @@ import java.awt.*;
 public class StartScreen extends JFrame {
 
     public StartScreen() {
-
         setTitle("Blackjack Start");
         setSize(1100, 750);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLayout(null); // 절대 좌표 배치
+        setLayout(null);
 
-        // =====================================
-        //  [수정] 배경 이미지 불러오기 (절대경로 방식)
-        // =====================================
+        //절대 경로로 배경 이미지 로드
         String bgPath = System.getProperty("user.dir") + "\\src\\main\\resources\\start.png";
-
         JLabel bgLabel = new JLabel();
-        // 이미지 로드 및 리사이징
         Image bg = new ImageIcon(bgPath).getImage().getScaledInstance(1100, 750, Image.SCALE_SMOOTH);
         bgLabel.setIcon(new ImageIcon(bg));
-
         bgLabel.setBounds(0, 0, 1100, 750);
         add(bgLabel);
 
-        // =====================================
-        //  버튼 2개 (Player1, Player2)
-        // =====================================
         JButton p1 = new JButton("PLAYER 1");
         JButton p2 = new JButton("PLAYER 2");
 
@@ -36,18 +27,13 @@ public class StartScreen extends JFrame {
 
         p1.setFont(new Font("Arial", Font.BOLD, 20));
         p2.setFont(new Font("Arial", Font.BOLD, 20));
-
         p1.setFocusPainted(false);
         p2.setFocusPainted(false);
 
-        // 버튼 위로 올리기
         bgLabel.setLayout(null);
         bgLabel.add(p1);
         bgLabel.add(p2);
 
-        // =====================================
-        // 버튼 클릭 → BlackjackClient 실행
-        // =====================================
         p1.addActionListener(e -> {
             new BlackjackClient("localhost", 5555, "PLAYER1");
             dispose();

@@ -21,7 +21,6 @@ public class BlackjackClient {
             gui = new GameGUI(line -> out.println(line));
             gui.setMyRole(role);
 
-            // 서버에 역할 전달
             out.println("MODE:" + role);
 
             new Thread(this::listen).start();
@@ -36,43 +35,34 @@ public class BlackjackClient {
             String msg;
             while ((msg = in.readLine()) != null) {
 
-                // 채팅
                 if (msg.startsWith("CHAT:")) {
                     gui.appendMessage(msg.substring(5));
                 }
-
-                // 카드 갱신
+                //게임 리셋 신호 처리
+                else if (msg.equals("GAME:RESET")) {
+                    gui.resetTable();
+                }
                 else if (msg.startsWith("GAME:CARD:")) {
                     gui.applyCardMessage(msg);
                 }
-
-                // 턴 변경
                 else if (msg.startsWith("GAME:TURN:")) {
                     gui.setTurn(msg.substring(10));
                 }
-
-                // 칩 갱신
                 else if (msg.startsWith("CHIPS:P1:")) {
                     gui.updateChips("PLAYER1", Integer.parseInt(msg.substring(9)));
                 }
                 else if (msg.startsWith("CHIPS:P2:")) {
                     gui.updateChips("PLAYER2", Integer.parseInt(msg.substring(9)));
                 }
-
-                // 베팅 시작
                 else if (msg.equals("INFO:BETTING")) {
                     gui.enableBetting();
                 }
-
-                // 서버 안내 메시지
                 else if (msg.startsWith("WAITING:")) {
                     gui.appendMessage(msg.substring(8));
                 }
                 else if (msg.startsWith("INFO:새 라운드")) {
                     gui.appendMessage(msg.substring(5));
                 }
-
-                // 그 외 일반 메시지
                 else {
                     gui.appendMessage(msg);
                 }
@@ -83,5 +73,4 @@ public class BlackjackClient {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(StartScreen::new);
     }
-
 }

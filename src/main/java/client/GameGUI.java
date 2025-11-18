@@ -3,7 +3,6 @@ package client;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-// import java.net.URL; // 더 이상 URL import는 필요 없음
 
 public class GameGUI extends JFrame {
 
@@ -25,10 +24,8 @@ public class GameGUI extends JFrame {
     private String myRole = "UNKNOWN";
     private String turnRole = "UNKNOWN";
 
-    // 카드 뒷면
     private ImageIcon backIcon;
     private JLabel dealerHiddenCardLabel = null;
-
 
     public GameGUI(Sender sender) {
         this.sender = sender;
@@ -38,18 +35,14 @@ public class GameGUI extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        // ==================== [수정] 카드 뒷면 이미지 로딩 ====================
-        // 사진의 방식: System.getProperty("user.dir") + 경로 문자열 결합
+        // [수정] 절대 경로로 카드 뒷면 이미지 로드
         String backPath = System.getProperty("user.dir") + "\\src\\main\\resources\\back.png";
-
-        // ImageIcon에 경로(String)를 바로 넣어서 로드
         backIcon = new ImageIcon(
                 new ImageIcon(backPath).getImage()
                         .getScaledInstance(90, 140, Image.SCALE_SMOOTH)
         );
-        // ==================================================================
 
-        // ==================== 상단 UI ====================
+        // 상단 UI
         JPanel control = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
 
         hitButton = new JButton("Hit");
@@ -72,7 +65,7 @@ public class GameGUI extends JFrame {
 
         add(control, BorderLayout.NORTH);
 
-        // ==================== 카드 테이블 ====================
+        // 카드 테이블
         JPanel table = new JPanel(new GridLayout(3, 1, 8, 8));
         dealerPanel = titledPanel("DEALER");
         p1Panel = titledPanel("PLAYER1");
@@ -84,10 +77,10 @@ public class GameGUI extends JFrame {
 
         add(table, BorderLayout.CENTER);
 
-        // ==================== 하단 전체 ====================
+        // 하단 패널
         JPanel bottomPanel = new JPanel(new BorderLayout());
 
-        // ==================== 배팅 패널 ====================
+        // 배팅 패널
         betPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         betPanel.setBorder(BorderFactory.createTitledBorder("배팅"));
 
@@ -111,7 +104,7 @@ public class GameGUI extends JFrame {
 
         bottomPanel.add(betPanel, BorderLayout.NORTH);
 
-        // ==================== 채팅 ====================
+        // 채팅
         chatArea = new JTextArea(8, 60);
         chatArea.setEditable(false);
 
@@ -134,7 +127,7 @@ public class GameGUI extends JFrame {
 
         add(bottomPanel, BorderLayout.SOUTH);
 
-        // ==================== 버튼 이벤트 ====================
+        // 버튼 이벤트
         hitButton.addActionListener(e -> {
             if (isMyTurn()) sender.send("GAME:HIT");
             else appendMessage("내 턴이 아닙니다.");
@@ -146,12 +139,11 @@ public class GameGUI extends JFrame {
         });
 
         disableButtons();
-        disableBetting(); // 초기에는 배팅 금지
+        disableBetting();
 
         setVisible(true);
     }
 
-    // ==================== 패널 생성 ====================
     private JPanel titledPanel(String title) {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
         p.setBackground(new Color(0, 80, 0));
@@ -183,21 +175,34 @@ public class GameGUI extends JFrame {
         chatArea.setCaretPosition(chatArea.getText().length());
     }
 
-    // ==================== [수정] 카드 이미지 로딩 ====================
-    // 사진의 방식대로 변경: user.dir + 경로 문자열 결합
+    //절대 경로로 카드 이미지 로드
     private ImageIcon loadCardIcon(String suit, String rank) {
-
-        // 경로 생성 (사진의 초록색 부분 참고)
         String path = System.getProperty("user.dir") + "\\src\\main\\resources\\" + suit + "\\" + rank + ".png";
-
-        // 이미지 로드 및 리사이징
-        Image img = new ImageIcon(path).getImage()
-                .getScaledInstance(90, 140, Image.SCALE_SMOOTH);
-
+        Image img = new ImageIcon(path).getImage().getScaledInstance(90, 140, Image.SCALE_SMOOTH);
         return new ImageIcon(img);
     }
 
-    // ==================== 카드 표시 ====================
+    // [수정] 테이블 초기화 및 버튼 강제 비활성화
+    public void resetTable() {
+        dealerPanel.removeAll();
+        p1Panel.removeAll();
+        p2Panel.removeAll();
+
+        dealerPanel.revalidate(); dealerPanel.repaint();
+        p1Panel.revalidate(); p1Panel.repaint();
+        p2Panel.revalidate(); p2Panel.repaint();
+
+        dealerHiddenCardLabel = null;
+        statusLabel.setText("배팅 대기중");
+        turnLabel.setText("턴: -");
+
+        // 턴 초기화 및 버튼 잠금
+        turnRole = "";
+        disableButtons();
+
+        appendMessage("============== [새 라운드] ==============");
+    }
+
     public void applyCardMessage(String line) {
         try {
             String[] a = line.split(":");
@@ -214,17 +219,13 @@ public class GameGUI extends JFrame {
 
             target.removeAll();
 
-            // 딜러 카드 처리
             if (role.equals("DEALER")) {
-
                 dealerHiddenCardLabel = null;
-
                 for (int i = 0; i < cards.length; i++) {
                     String[] parts = cards[i].split("-");
                     String suit = parts[0];
                     String rank = parts[1];
 
-                    // 두 번째 카드 뒷면
                     if (i == 1 && cards.length == 2) {
                         dealerHiddenCardLabel = new JLabel(backIcon);
                         target.add(dealerHiddenCardLabel);
@@ -232,47 +233,36 @@ public class GameGUI extends JFrame {
                         target.add(new JLabel(loadCardIcon(suit, rank)));
                     }
                 }
-
-                // 전체 공개된 경우
                 if (cards.length >= 2 && dealerHiddenCardLabel != null) {
                     String[] sr = cards[1].split("-");
                     dealerHiddenCardLabel.setIcon(loadCardIcon(sr[0], sr[1]));
                 }
-
-                target.revalidate();
-                target.repaint();
+                target.revalidate(); target.repaint();
                 return;
             }
 
-            // 플레이어 카드
             for (String c : cards) {
                 String[] sr = c.split("-");
                 target.add(new JLabel(loadCardIcon(sr[0], sr[1])));
             }
-
-            target.revalidate();
-            target.repaint();
+            target.revalidate(); target.repaint();
 
         } catch (Exception e) {
             appendMessage("[오류] 카드 표시 실패: " + e.getMessage());
-            e.printStackTrace(); // 콘솔에 에러 자세히 출력
         }
     }
 
-    // ==================== 칩 UI 업데이트 ====================
     public void updateChips(String role, int amount) {
         if (role.equals(myRole)) {
             chipLabel.setText("칩: " + amount);
         }
     }
 
-    // ==================== 배팅 전송 ====================
     private void sendBet(String value) {
         sender.send("BET:" + value);
         disableBetting();
     }
 
-    // ==================== 배팅 활성화/비활성화 ====================
     public void enableBetting() {
         betAll.setEnabled(true);
         bet50.setEnabled(true);

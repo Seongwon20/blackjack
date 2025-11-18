@@ -15,7 +15,7 @@ public class BlackjackServer {
     private Deck deck;
     private Hand dealerHand;
 
-    private int betCount = 0;      // 두 플레이어 모두 배팅하면 2가 됨
+    private int betCount = 0;
     private boolean roundInProgress = false;
 
     public static void main(String[] args) {
@@ -51,14 +51,18 @@ public class BlackjackServer {
         roundInProgress = false;
         betCount = 0;
 
-        deck = new Deck();
-        dealerHand = new Hand();
+        deck = new Deck();       // 새 덱
+        dealerHand = new Hand(); // 딜러 패 초기화
 
-        p1.getHand().getCards().clear();
-        p2.getHand().getCards().clear();
+        // 플레이어 패 초기화 (칩은 유지됨)
+        p1.getHand().clear();
+        p2.getHand().clear();
 
         p1.resetBet();
         p2.resetBet();
+
+        // 클라이언트 테이블 리셋 명령
+        broadcast("GAME:RESET");
 
         broadcast("CHAT:[SYSTEM] 새로운 라운드를 시작합니다. 배팅을 해주세요.");
         broadcast("INFO:BETTING");
@@ -103,6 +107,9 @@ public class BlackjackServer {
     // --------------------- 딜러 턴 ---------------------
     private void dealerTurn() {
 
+        //딜러 턴임을 알려서 플레이어 버튼 비활성화
+        broadcast("GAME:TURN:DEALER");
+
         broadcast("CHAT:[SYSTEM] 딜러 턴 시작.");
         broadcast("GAME:CARD:DEALER:" + formatCards(dealerHand));
 
@@ -139,7 +146,8 @@ public class BlackjackServer {
             return;
         }
 
-        try { Thread.sleep(2000); } catch (Exception ignored) {}
+        //결과 확인 6초 대기
+        try { Thread.sleep(6000); } catch (Exception ignored) {}
 
         startNewRound();
     }
@@ -157,31 +165,22 @@ public class BlackjackServer {
 
         int bet = p.getBetAmount();
 
-        // 무승부 → 배팅금 반환
         if (v == d) {
             p.winChips(bet);
             return;
         }
-
-        // 버스트 → 배팅 잃음
         if (v > 21) {
             p.loseChips(bet);
             return;
         }
-
-        // 딜러 버스트 → 승리
         if (d > 21) {
             p.winChips(bet);
             return;
         }
-
-        // 블랙잭 3:2 지급
         if (v == 21 && p.getHand().getCards().size() == 2) {
             p.winChips((int)(bet * 1.5));
             return;
         }
-
-        // 일반 승리
         if (v > d) {
             p.winChips(bet);
         } else {
@@ -202,7 +201,6 @@ public class BlackjackServer {
 
         @Override
         public void run() {
-
             try {
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
                 out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
@@ -210,13 +208,10 @@ public class BlackjackServer {
                 send("WAITING:상대 플레이어 연결을 기다리는 중...");
 
                 String line;
-
                 while ((line = in.readLine()) != null) {
 
-                    // 역할 설정
                     if (line.startsWith("MODE:")) {
                         role = line.substring(5);
-
                         if (role.equals("PLAYER1")) p1 = new Player("PLAYER1");
                         if (role.equals("PLAYER2")) p2 = new Player("PLAYER2");
 
@@ -225,41 +220,27 @@ public class BlackjackServer {
                             startNewRound();
                         }
                     }
-
-                    // 채팅
                     else if (line.startsWith("CHAT:")) {
                         broadcast("CHAT:[" + role + "] " + line.substring(5));
                     }
-
-                    // --------------------- 배팅 ---------------------
                     else if (line.startsWith("BET:")) {
                         handleBet(role, line.substring(4));
                     }
-
-                    // --------------------- HIT ---------------------
                     else if (line.startsWith("GAME:HIT")) {
                         handleHit(role);
                     }
-
-                    // --------------------- STAND ---------------------
                     else if (line.startsWith("GAME:STAND")) {
                         handleStand(role);
                     }
-
                 }
-
             } catch (IOException e) {
                 System.out.println("클라이언트 종료: " + role);
             }
-
             clients.remove(this);
         }
 
-        // --------------------- 배팅 처리 ---------------------
         private void handleBet(String role, String amount) {
-
             Player cur = (role.equals("PLAYER1") ? p1 : p2);
-
             int chips = cur.getChips();
             int bet = amount.equals("ALL") ? chips : Integer.parseInt(amount);
 
@@ -273,49 +254,32 @@ public class BlackjackServer {
 
             broadcast("CHAT:[" + role + "] " + bet + "칩 배팅");
 
-            // **두 플레이어 모두 배팅함 → 라운드 시작**
             if (betCount == 2) {
-
                 try { Thread.sleep(600); } catch (Exception ignored) {}
-
                 dealInitialCards();
             }
         }
 
-        // --------------------- HIT ---------------------
         private void handleHit(String role) {
-
             if (!roundInProgress) return;
-
             Player cur = role.equals("PLAYER1") ? p1 : p2;
 
             cur.getHand().addCard(deck.draw());
             broadcast("GAME:CARD:" + role + ":" + formatCards(cur.getHand()));
 
-            // 버스트 처리
             if (cur.getHand().getValue() > 21) {
                 broadcast("CHAT:[" + role + "] 버스트!");
-
-                if (role.equals("PLAYER1")) {
-                    broadcast("GAME:TURN:PLAYER2");
-                } else {
-                    dealerTurn();
-                }
+                if (role.equals("PLAYER1")) broadcast("GAME:TURN:PLAYER2");
+                else dealerTurn();
             }
         }
 
-        // --------------------- STAND ---------------------
         private void handleStand(String role) {
             broadcast("CHAT:[" + role + "] Stand");
-
-            if (role.equals("PLAYER1")) {
-                broadcast("GAME:TURN:PLAYER2");
-            } else {
-                dealerTurn();
-            }
+            if (role.equals("PLAYER1")) broadcast("GAME:TURN:PLAYER2");
+            else dealerTurn();
         }
 
-        // --------------------- 단일 전송 ---------------------
         private void send(String msg) {
             try {
                 out.write(msg + "\n");
