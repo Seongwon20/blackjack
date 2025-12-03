@@ -35,14 +35,12 @@ public class GameGUI extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        // [수정] 절대 경로로 카드 뒷면 이미지 로드
         String backPath = System.getProperty("user.dir") + "\\src\\main\\resources\\back.png";
         backIcon = new ImageIcon(
                 new ImageIcon(backPath).getImage()
                         .getScaledInstance(90, 140, Image.SCALE_SMOOTH)
         );
 
-        // 상단 UI
         JPanel control = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
 
         hitButton = new JButton("Hit");
@@ -65,7 +63,6 @@ public class GameGUI extends JFrame {
 
         add(control, BorderLayout.NORTH);
 
-        // 카드 테이블
         JPanel table = new JPanel(new GridLayout(3, 1, 8, 8));
         dealerPanel = titledPanel("DEALER");
         p1Panel = titledPanel("PLAYER1");
@@ -77,10 +74,8 @@ public class GameGUI extends JFrame {
 
         add(table, BorderLayout.CENTER);
 
-        // 하단 패널
         JPanel bottomPanel = new JPanel(new BorderLayout());
 
-        // 배팅 패널
         betPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         betPanel.setBorder(BorderFactory.createTitledBorder("배팅"));
 
@@ -104,7 +99,6 @@ public class GameGUI extends JFrame {
 
         bottomPanel.add(betPanel, BorderLayout.NORTH);
 
-        // 채팅
         chatArea = new JTextArea(8, 60);
         chatArea.setEditable(false);
 
@@ -113,7 +107,7 @@ public class GameGUI extends JFrame {
             String msg = chatInput.getText().trim();
             if (!msg.isEmpty()) {
                 sender.send("CHAT:" + msg);
-                appendMessage("[나] " + msg);
+
                 chatInput.setText("");
             }
         });
@@ -127,7 +121,6 @@ public class GameGUI extends JFrame {
 
         add(bottomPanel, BorderLayout.SOUTH);
 
-        // 버튼 이벤트
         hitButton.addActionListener(e -> {
             if (isMyTurn()) sender.send("GAME:HIT");
             else appendMessage("내 턴이 아닙니다.");
@@ -139,7 +132,6 @@ public class GameGUI extends JFrame {
         });
 
         disableButtons();
-        disableBetting();
 
         setVisible(true);
     }
@@ -175,14 +167,12 @@ public class GameGUI extends JFrame {
         chatArea.setCaretPosition(chatArea.getText().length());
     }
 
-    //절대 경로로 카드 이미지 로드
     private ImageIcon loadCardIcon(String suit, String rank) {
         String path = System.getProperty("user.dir") + "\\src\\main\\resources\\" + suit + "\\" + rank + ".png";
         Image img = new ImageIcon(path).getImage().getScaledInstance(90, 140, Image.SCALE_SMOOTH);
         return new ImageIcon(img);
     }
 
-    // [수정] 테이블 초기화 및 버튼 강제 비활성화
     public void resetTable() {
         dealerPanel.removeAll();
         p1Panel.removeAll();
@@ -196,9 +186,7 @@ public class GameGUI extends JFrame {
         statusLabel.setText("배팅 대기중");
         turnLabel.setText("턴: -");
 
-        // 턴 초기화 및 버튼 잠금
         turnRole = "";
-        disableButtons();
 
         appendMessage("============== [새 라운드] ==============");
     }
@@ -219,33 +207,13 @@ public class GameGUI extends JFrame {
 
             target.removeAll();
 
-            if (role.equals("DEALER")) {
-                dealerHiddenCardLabel = null;
-                for (int i = 0; i < cards.length; i++) {
-                    String[] parts = cards[i].split("-");
-                    String suit = parts[0];
-                    String rank = parts[1];
-
-                    if (i == 1 && cards.length == 2) {
-                        dealerHiddenCardLabel = new JLabel(backIcon);
-                        target.add(dealerHiddenCardLabel);
-                    } else {
-                        target.add(new JLabel(loadCardIcon(suit, rank)));
-                    }
-                }
-                if (cards.length >= 2 && dealerHiddenCardLabel != null) {
-                    String[] sr = cards[1].split("-");
-                    dealerHiddenCardLabel.setIcon(loadCardIcon(sr[0], sr[1]));
-                }
-                target.revalidate(); target.repaint();
-                return;
-            }
-
             for (String c : cards) {
                 String[] sr = c.split("-");
                 target.add(new JLabel(loadCardIcon(sr[0], sr[1])));
             }
-            target.revalidate(); target.repaint();
+
+            target.revalidate();
+            target.repaint();
 
         } catch (Exception e) {
             appendMessage("[오류] 카드 표시 실패: " + e.getMessage());
@@ -260,7 +228,6 @@ public class GameGUI extends JFrame {
 
     private void sendBet(String value) {
         sender.send("BET:" + value);
-        disableBetting();
     }
 
     public void enableBetting() {
@@ -270,14 +237,6 @@ public class GameGUI extends JFrame {
         bet5.setEnabled(true);
         bet1.setEnabled(true);
         betPanel.setVisible(true);
-    }
-
-    public void disableBetting() {
-        betAll.setEnabled(false);
-        bet50.setEnabled(false);
-        bet10.setEnabled(false);
-        bet5.setEnabled(false);
-        bet1.setEnabled(false);
     }
 
     private void enableButtons() {
