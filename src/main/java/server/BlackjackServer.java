@@ -16,6 +16,8 @@ public class BlackjackServer {
     private Hand dealerHand;
 
     private boolean roundInProgress = false;
+    private boolean p1Done = false;
+    private boolean p2Done = false;
 
     public static void main(String[] args) {
         new BlackjackServer().startServer();
@@ -45,6 +47,9 @@ public class BlackjackServer {
     private void startNewRound() {
 
         roundInProgress = false;
+
+        p1Done = false;
+        p2Done = false;
 
         deck = new Deck();
         dealerHand = new Hand();
@@ -136,30 +141,23 @@ public class BlackjackServer {
 
         int bet = p.getBetAmount();
 
-        // 무승부 → 칩 반환
         if (v == d) {
             p.winChips(bet);
             return;
         }
 
-        // 플레이어 버스트 → 잃음
-        if (v > 21) {
-            return;
-        }
+        if (v > 21) return;
 
-        // 딜러 버스트 → 2배 지급
         if (d > 21) {
             p.winChips(bet * 2);
             return;
         }
 
-        // 블랙잭 → 2.5배
         if (v == 21 && p.getHand().getCards().size() == 2) {
             p.winChips((int)(bet * 2.5));
             return;
         }
 
-        // 일반 승리 → 2배
         if (v > d) {
             p.winChips(bet * 2);
         }
@@ -173,9 +171,7 @@ public class BlackjackServer {
 
         private String role = "UNKNOWN";
 
-        ClientHandler(Socket socket) {
-            this.socket = socket;
-        }
+        ClientHandler(Socket socket) { this.socket = socket; }
 
         @Override
         public void run() {
@@ -202,6 +198,9 @@ public class BlackjackServer {
                     else if (line.startsWith("CHAT:")) {
                         broadcast("CHAT:[" + role + "] " + line.substring(5));
                     }
+                    else if (line.equals("BET:DONE")) {
+                        handleBetDone(role);
+                    }
                     else if (line.startsWith("BET:")) {
                         handleBet(role, line.substring(4));
                     }
@@ -218,6 +217,18 @@ public class BlackjackServer {
             clients.remove(this);
         }
 
+        private void handleBetDone(String role) {
+            if (role.equals("PLAYER1")) p1Done = true;
+            else p2Done = true;
+
+            broadcast("CHAT:[" + role + "] 배팅 완료");
+
+            if (p1Done && p2Done && !roundInProgress) {
+                try { Thread.sleep(600); } catch (Exception ignored) {}
+                dealInitialCards();
+            }
+        }
+
         private void handleBet(String role, String amount) {
             Player cur = (role.equals("PLAYER1") ? p1 : p2);
 
@@ -229,21 +240,11 @@ public class BlackjackServer {
                 return;
             }
 
-            // 칩 즉시 차감
             cur.loseChips(bet);
-
-            // 누적 배팅
             cur.setBetAmount(cur.getBetAmount() + bet);
 
-            broadcast("CHAT:[" + role + "] +" + bet + "칩 베팅 (잔여칩 " + cur.getChips() + ")");
-            broadcast("CHIPS:P1:" + p1.getChips());
-            broadcast("CHIPS:P2:" + p2.getChips());
-
-            // 최소 1회씩 배팅해야 시작
-            if (p1.getBetAmount() > 0 && p2.getBetAmount() > 0 && !roundInProgress) {
-                try { Thread.sleep(600); } catch (Exception ignored) {}
-                dealInitialCards();
-            }
+            broadcast("CHAT:[" + role + "] +" + bet + "칩 (총 배팅 " + cur.getBetAmount() + ")");
+            updateChips();
         }
 
         private void handleHit(String role) {
@@ -256,11 +257,8 @@ public class BlackjackServer {
 
             if (cur.getHand().getValue() > 21) {
                 broadcast("CHAT:[" + role + "] 버스트!");
-                if (role.equals("PLAYER1")) {
-                    broadcast("GAME:TURN:PLAYER2");
-                } else {
-                    dealerTurn();
-                }
+                if (role.equals("PLAYER1")) broadcast("GAME:TURN:PLAYER2");
+                else dealerTurn();
             }
         }
 
