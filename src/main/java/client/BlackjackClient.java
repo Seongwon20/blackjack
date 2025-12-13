@@ -4,11 +4,7 @@ import javax.swing.*;
 import java.io.*;
 import java.net.Socket;
 
-/**
- * BlackjackClient
- * - 서버와 TCP 소켓으로 연결되는 클라이언트 네트워크 클래스
- * - GUI ↔ 서버 사이의 메시지 중계 역할
- */
+/*서버와 TCP 소켓으로 연결되는 클라이언트 네트워크 클래스, GUI ↔ 서버 사이의 메시지 중계 역할*/
 public class BlackjackClient {
 
     //서버와의 소켓 통신 객체
@@ -24,11 +20,10 @@ public class BlackjackClient {
     private GameGUI gui;
 
     /**
-     * 클라이언트 생성자
-     * @param host 서버 주소
-     * @param port 서버 포트
-     * @param role PLAYER1 / PLAYER2 역할
-     */
+     클라이언트 생성자
+     @param host 서버 주소
+     @param port 서버 포트
+     @param role PLAYER1 / PLAYER2 역할*/
     public BlackjackClient(String host, int port, String role) {
         try {
             //서버와 소켓 연결
