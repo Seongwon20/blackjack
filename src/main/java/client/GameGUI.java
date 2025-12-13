@@ -8,7 +8,7 @@ import java.awt.image.BufferedImage;
 
 public class GameGUI extends JFrame {
 
-    public interface Sender { void send(String line); }
+    public interface Sender { void send(String line); }//서버로 메시지를 보내기 위한 인터페이스
 
     //서버로 메시지를 전송하기 위한 콜백 객체
     private final Sender sender;
@@ -175,7 +175,7 @@ public class GameGUI extends JFrame {
         //버튼 기능
         //Hit 버튼: 내 턴일 때만 서버로 요청
         hitButton.addActionListener(e -> {
-            if (isMyTurn()) sender.send("GAME:HIT");
+            if (isMyTurn()) sender.send("GAME:HIT");//내 턴일 때만 작동
             else appendMessage("내 턴이 아닙니다.");
         });
 
